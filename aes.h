@@ -2,6 +2,7 @@
 #define AESHASHMITM_AES_H
 
 #include <algorithm>
+#include <string>
 
 namespace AESLib {
     typedef unsigned char Byte;
@@ -10,8 +11,9 @@ namespace AESLib {
     const int N_B = 4;  // Number of words per block (status). Always 4.
 
     class Status {
-        Byte value[N_B][4]{};
     public:
+        Byte value[N_B][4]{};
+
         Status();
 
         Status(const std::initializer_list<Byte> &values);
@@ -20,7 +22,11 @@ namespace AESLib {
 
         bool operator==(const Status &y) const;
 
-        void print() const;
+        void operator+=(const Status &y);
+
+        Status operator+(const Status &y);
+
+        [[nodiscard]] std::string ToString() const;
 
         void SubBytes();
 
@@ -33,8 +39,6 @@ namespace AESLib {
         void MixColumns();
 
         void InvMixColumns();
-
-        void AddRoundKey(const Word *w, int round);
     };
 
     class AES {
@@ -42,18 +46,34 @@ namespace AESLib {
         int n_r = 10;   // Number of round. Can be 10, 12, 14.
         Word w[60] = {};    // It is needed 60 word w for 14 round.
     public:
+        AES();
+
         explicit AES(const Byte *key, int n_k = 4, int n_r = 10);
 
         void KeyExpansion(const Byte *key);
 
-        Status Cipher(const Status &in);
+        void AddRoundKey(Status &status, int round) const;
 
-        Status InvCipher(const Status &in);
+        void Round(Status &status, int round) const;
 
-        void WReader(Word *w_);
+        void InvRound(Status &status, int round) const;
+
+        [[nodiscard]] Status Cipher(Status status) const;
+
+        [[nodiscard]] Status InvCipher(Status status) const;
+
+        [[nodiscard]] Status CompressionFunction(Status status) const;
+
+        void ReadW(Word *w_);
     };
 
     Byte GFMul(Byte x, Byte y);
+
+    void GFMatrixMul(Byte x[4][4], Byte y[4][4], Byte ret[4][4]);
+
+    Byte GFInvSlow(Byte x);
+
+    Byte ByteInWord(Word x, int y);
 
     Byte SBox(Byte x);
 

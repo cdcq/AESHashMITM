@@ -1,7 +1,10 @@
 #include "aes.h"
 
-#include <iostream>
+#include "log.h"
 #include <initializer_list>
+#include <iomanip>
+#include <string>
+#include <sstream>
 
 namespace AESLib {
     Status::Status() = default;
@@ -36,8 +39,8 @@ namespace AESLib {
     }
 
     bool Status::operator==(const Status &y) const {
-        for (int i = 0; i < 4; i++) {
-            for (int j = 0; j < N_B; j++) {
+        for (int i = 0; i < N_B; i++) {
+            for (int j = 0; j < 4; j++) {
                 if (value[i][j] != y.value[i][j]) {
                     return false;
                 }
@@ -46,14 +49,34 @@ namespace AESLib {
         return true;
     }
 
-    void Status::print() const {
+    void Status::operator+=(const Status &y) {
+        for (int i = 0; i < N_B; i++) {
+            for (int j = 0; j < 4; j++) {
+                value[i][j] ^= y.value[i][j];
+            }
+        }
+    }
+
+    Status Status::operator+(const Status &y) {
+        Status ret = {};
+        for (int i = 0; i < N_B; i++) {
+            for (int j = 0; j < 4; j++) {
+                ret.value[i][j] = value[i][j] ^ y.value[i][j];
+            }
+        }
+        return ret;
+    }
+
+    std::string Status::ToString() const {
+        using namespace std;
+        stringstream ss;
         for (auto &i: value) {
             for (auto j: i) {
-                printf("%02X ", j);
+                ss << setw(2) << setfill('0') << hex << (int) j << " ";
             }
-            printf("\n");
+            ss << endl;
         }
-        fflush(stdout);
+        return ss.str();
     }
 
     void Status::SubBytes() {
@@ -74,40 +97,45 @@ namespace AESLib {
 
     void Status::ShiftRows() {
         using namespace std;
-        swap(value[1][0], value[1][3]);
-        swap(value[1][0], value[1][2]);
-        swap(value[1][0], value[1][1]);
+        Byte temp = value[1][0];
+        value[1][0] = value[1][1];
+        value[1][1] = value[1][2];
+        value[1][2] = value[1][3];
+        value[1][3] = temp;
         swap(value[2][0], value[2][2]);
         swap(value[2][1], value[2][3]);
-        swap(value[3][0], value[3][1]);
-        swap(value[3][0], value[3][2]);
-        swap(value[3][0], value[3][3]);
+        temp = value[3][3];
+        value[3][3] = value[3][2];
+        value[3][2] = value[3][1];
+        value[3][1] = value[3][0];
+        value[3][0] = temp;
     }
 
     void Status::InvShiftRows() {
         using namespace std;
-        swap(value[3][3], value[3][0]);
-        swap(value[3][2], value[3][0]);
-        swap(value[3][1], value[3][0]);
-        swap(value[2][3], value[2][1]);
-        swap(value[2][2], value[2][0]);
-        swap(value[1][1], value[1][0]);
-        swap(value[1][2], value[1][0]);
-        swap(value[1][3], value[1][0]);
+        Byte temp = value[1][3];
+        value[1][3] = value[1][2];
+        value[1][2] = value[1][1];
+        value[1][1] = value[1][0];
+        value[1][0] = temp;
+        swap(value[2][0], value[2][2]);
+        swap(value[2][1], value[2][3]);
+        temp = value[3][0];
+        value[3][0] = value[3][1];
+        value[3][1] = value[3][2];
+        value[3][2] = value[3][3];
+        value[3][3] = temp;
     }
 
     void Status::MixColumns() {
+        static Byte matrix[4][4] = {
+                0x2, 0x3, 0x1, 0x1,
+                0x1, 0x2, 0x3, 0x1,
+                0x1, 0x1, 0x2, 0x3,
+                0x3, 0x1, 0x1, 0x2,
+        };
         static Status temp = {};
-        for (int i = 0; i < 4; i++) {
-            temp.value[0][i] = GFMul(2, value[0][i]) ^ GFMul(3, value[1][i])
-                               ^ GFMul(1, value[2][i]) ^ GFMul(1, value[3][i]);
-            temp.value[1][i] = GFMul(1, value[0][i]) ^ GFMul(2, value[1][i])
-                               ^ GFMul(3, value[2][i]) ^ GFMul(1, value[3][i]);
-            temp.value[2][i] = GFMul(1, value[0][i]) ^ GFMul(1, value[1][i])
-                               ^ GFMul(2, value[2][i]) ^ GFMul(3, value[3][i]);
-            temp.value[3][i] = GFMul(3, value[0][i]) ^ GFMul(1, value[1][i])
-                               ^ GFMul(1, value[2][i]) ^ GFMul(2, value[3][i]);
-        }
+        GFMatrixMul(matrix, value, temp.value);
         for (int i = 0; i < 4; i++) {
             for (int j = 0; j < 4; j++) {
                 value[i][j] = temp.value[i][j];
@@ -116,29 +144,17 @@ namespace AESLib {
     }
 
     void Status::InvMixColumns() {
+        static Byte matrix[4][4] = {
+                0xe, 0xb, 0xd, 0x9,
+                0x9, 0xe, 0xb, 0xd,
+                0xd, 0x9, 0xe, 0xb,
+                0xb, 0xd, 0x9, 0xe,
+        };
         static Status temp = {};
-        for (int i = 0; i < 4; i++) {
-            temp.value[0][i] = GFMul(0xe, value[0][i]) ^ GFMul(0xb, value[1][i])
-                               ^ GFMul(0xd, value[2][i]) ^ GFMul(0x9, value[3][i]);
-            temp.value[1][i] = GFMul(0x9, value[0][i]) ^ GFMul(0xe, value[1][i])
-                               ^ GFMul(0xb, value[2][i]) ^ GFMul(0xd, value[3][i]);
-            temp.value[2][i] = GFMul(0xd, value[0][i]) ^ GFMul(0x9, value[1][i])
-                               ^ GFMul(0xe, value[2][i]) ^ GFMul(0xb, value[3][i]);
-            temp.value[3][i] = GFMul(0xb, value[0][i]) ^ GFMul(0xd, value[1][i])
-                               ^ GFMul(0x9, value[2][i]) ^ GFMul(0xe, value[3][i]);
-        }
+        GFMatrixMul(matrix, value, temp.value);
         for (int i = 0; i < 4; i++) {
             for (int j = 0; j < 4; j++) {
                 value[i][j] = temp.value[i][j];
-            }
-        }
-    }
-
-    void Status::AddRoundKey(const Word *w, int round) {
-        int base = round * 4;
-        for (int i = 0; i < 4; i++) {
-            for (int j = 0; j < 4; j++) {
-                value[i][j] ^= (w[base + j] >> (24 - i * 8)) & 0xff;
             }
         }
     }
@@ -158,6 +174,32 @@ namespace AESLib {
         }
         return ret;
     }
+
+    void GFMatrixMul(Byte x[4][4], Byte y[4][4], Byte ret[4][4]) {
+        for(int row = 0; row < 4; row++) {
+            for(int col = 0; col < 4; col++) {
+                ret[row][col] = 0;
+                for(int i = 0; i < 4; i++) {
+                    ret[row][col] ^= GFMul(x[row][i], y[i][col]);
+                }
+            }
+        }
+    }
+
+    Byte GFInvSlow(Byte x) {
+        for (int i = 0; i < 0xff; i++) {
+            if (GFMul(i, x) == 1) {
+                return i;
+            }
+        }
+        return 0;
+    }
+
+    Byte ByteInWord(Word x, int y) {
+        return x >> (24 - y * 8) & 0xff;
+    }
+
+    AES::AES() = default;
 
     AES::AES(const Byte *key, int n_k_, int n_r_) {
         n_k = n_k_;
@@ -188,38 +230,62 @@ namespace AESLib {
         }
     }
 
-    Status AES::Cipher(const Status &in) {
-        Status status = in;
-        status.AddRoundKey(w, 0);
-        for (int round = 1; round < n_r; round++) {
-            status.SubBytes();
-            status.ShiftRows();
+    void AES::AddRoundKey(Status &status, int round) const {
+        int base = round * 4;
+        for (int i = 0; i < 4; i++) {
+            for (int j = 0; j < 4; j++) {
+                status.value[i][j] ^= (w[base + j] >> (24 - i * 8)) & 0xff;
+            }
+        }
+    }
+
+    void AES::Round(Status &status, int round) const {
+        status.SubBytes();
+        status.ShiftRows();
+        if (round != n_r)
             status.MixColumns();
-            status.AddRoundKey(w, round);
+        AddRoundKey(status, round);
+    }
+
+    void AES::InvRound(Status &status, int round) const {
+        AddRoundKey(status, round);
+        if (round != n_r)
+            status.InvMixColumns();
+        status.InvShiftRows();
+        status.InvSubBytes();
+    }
+
+    Status AES::Cipher(Status status) const {
+        AddRoundKey(status, 0);
+        for (int round = 1; round < n_r; round++) {
+            Round(status, round);
         }
         status.SubBytes();
         status.ShiftRows();
         // No MixColumns in last round.
-        status.AddRoundKey(w, n_r);
+        AddRoundKey(status, n_r);
         return status;
     }
 
-    Status AES::InvCipher(const Status &in) {
-        Status status = in;
-        status.AddRoundKey(w, n_r);
+    Status AES::InvCipher(Status status) const {
+        AddRoundKey(status, n_r);
         for (int round = n_r - 1; round >= 1; round--) {
             status.InvShiftRows();
             status.InvSubBytes();
-            status.AddRoundKey(w, round);
+            AddRoundKey(status, round);
             status.InvMixColumns();
         }
         status.InvShiftRows();
         status.InvSubBytes();
-        status.AddRoundKey(w, 0);
+        AddRoundKey(status, 0);
         return status;
     }
 
-    void AES::WReader(Word *w_) {
+    Status AES::CompressionFunction(Status status) const {
+        return Cipher(status) + status;
+    }
+
+    void AES::ReadW(Word *w_) {
         // Only for test.
         for (int i = 0; i < N_B * (n_r + 1); i++) {
             w_[i] = w[i];
@@ -245,8 +311,6 @@ namespace AESLib {
     void AESTest() {
         using namespace AESLib;
         using namespace std;
-
-        Status start(initializer_list<Word>{});
 
         // Data from FIPS 197 appendix B round 1st.
         Status start_of_round(initializer_list<Byte>(
@@ -298,40 +362,69 @@ namespace AESLib {
 
         AES aes(key);
         Word w[60] = {};
-        aes.WReader(w);
+        aes.ReadW(w);
         if (
                 w[40] == (Word) 0xd014f9a8 &&
                 w[41] == (Word) 0xc9ee2589 &&
                 w[42] == (Word) 0xe13f0cc8 &&
                 w[43] == (Word) 0xb6630ca6
                 ) {
-            cout << "KeyExpansion test: passed" << endl;
+            Log::Correct("KeyExpansion test: passed");
         } else {
-            cout << "KeyExpansion test: failed" << endl;
+            Log::Error("KeyExpansion test: failed");
         }
 
         Status x = start_of_round;
         x.SubBytes();
-        cout << "SubBytes test: " << (x == after_sub_bytes ? "passed" : "failed") << endl;
+        if (x == after_sub_bytes) {
+            Log::Correct("SubBytes test: passed");
+        } else {
+            Log::Error("SubBytes test: failed");
+        }
         x = after_sub_bytes;
         x.InvSubBytes();
-        cout << "InvSubBytes test: " << (x == start_of_round ? "passed" : "failed") << endl;
+        if (x == start_of_round) {
+            Log::Correct("InvSubBytes test: passed");
+        } else {
+            Log::Error("InvSubBytes test: failed");
+        }
         x = after_sub_bytes;
         x.ShiftRows();
-        cout << "ShiftRows test: " << (x == after_shift_rows ? "passed" : "failed") << endl;
+        if (x == after_shift_rows) {
+            Log::Correct("ShiftRows test: passed");
+        } else {
+            Log::Error("ShiftRows test: failed");
+        }
         x = after_shift_rows;
         x.InvShiftRows();
-        cout << "InvShiftRows test: " << (x == after_sub_bytes ? "passed" : "failed") << endl;
+        if (x == after_sub_bytes) {
+            Log::Correct("InvShiftRows test: passed");
+        } else {
+            Log::Error("InvShiftRows test: failed");
+        }
         x = after_shift_rows;
         x.MixColumns();
-        cout << "MixColumns test: " << (x == after_mix_columns ? "passed" : "failed") << endl;
+        if (x == after_mix_columns) {
+            Log::Correct("MixColumns test: passed");
+        } else {
+            Log::Error("MixColumns test: failed");
+        }
         x = after_mix_columns;
         x.InvMixColumns();
-        cout << "InvMixColumns test: " << (x == after_shift_rows ? "passed" : "failed") << endl;
+        if (x == after_shift_rows) {
+            Log::Correct("InvMixColumns test: passed");
+        } else {
+            Log::Error("InvMixColumns test: failed");
+        }
         x = after_mix_columns;
-        x.AddRoundKey(w, 1);
-        cout << "AddRoundKey test: " << (x == result_of_round ? "passed" : "failed") << endl;
-        cout << "\tThis result is rely on the result of KeyExpansion test." << endl;
+        aes.AddRoundKey(x, 1);
+        if (x == result_of_round) {
+            Log::Correct("AddRoundKey test: passed\n"
+                         "\tThis result is rely on the result of KeyExpansion test.");
+        } else {
+            Log::Error("AddRoundKey test: failed\n"
+                       "\tThis result is rely on the result of KeyExpansion test.");
+        }
 
         Status input(initializer_list<Byte>(
                 {
@@ -350,9 +443,17 @@ namespace AESLib {
                 }
         ));
         Status res = aes.Cipher(input);
-        cout << "Full round test: " << (res == output ? "passed" : "failed") << endl;
+        if (res == output) {
+            Log::Correct("Full round test: passed");
+        } else {
+            Log::Error("Full round test: failed");
+        }
         res = aes.InvCipher(output);
-        cout << "Full round inverse test: " << (res == input ? "passed" : "failed") << endl;
+        if (res == input) {
+            Log::Correct("Full round inverse test: passed");
+        } else {
+            Log::Error("Full round test: failed");
+        }
     }
 
 } // AESLib
