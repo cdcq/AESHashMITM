@@ -199,6 +199,10 @@ namespace AESLib {
         return x >> (24 - y * 8) & 0xff;
     }
 
+    Word WordByByte(Byte x0, Byte x1, Byte x2, Byte x3) {
+        return x0 << 24 | x1 << 16 | x2 << 8 | x3;
+    }
+
     AES::AES() = default;
 
     AES::AES(const Byte *key, int n_k_, int n_r_) {
@@ -285,8 +289,7 @@ namespace AESLib {
         return Cipher(status) + status;
     }
 
-    void AES::ReadW(Word *w_) {
-        // Only for test.
+    void AES::ReadW(Word *w_) const {
         for (int i = 0; i < N_B * (n_r + 1); i++) {
             w_[i] = w[i];
         }
@@ -304,8 +307,20 @@ namespace AESLib {
         return ret;
     }
 
+    Word InvSubWord(Word x) {
+        Word ret = 0;
+        for (int i = 0; i < 4; i++, x >>= 8) {
+            ret |= SBox(x & 0xff) << (i * 8);
+        }
+        return ret;
+    }
+
     inline Word RotWord(Word x) {
         return x << 8 | x >> 24;
+    }
+
+    Word InvRotWord(Word x) {
+        return x >> 8 | (x & 0xff) << 24;
     }
 
     void AESTest() {

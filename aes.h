@@ -64,7 +64,7 @@ namespace AESLib {
 
         [[nodiscard]] Status CompressionFunction(Status status) const;
 
-        void ReadW(Word *w_);
+        void ReadW(Word *w_) const;
     };
 
     Byte GFMul(Byte x, Byte y);
@@ -75,11 +75,17 @@ namespace AESLib {
 
     Byte ByteInWord(Word x, int y);
 
+    Word WordByByte(Byte x0, Byte x1, Byte x2, Byte x3);
+
     Byte SBox(Byte x);
 
     Word SubWord(Word x);
 
+    Word InvSubWord(Word x);
+
     Word RotWord(Word x);
+
+    Word InvRotWord(Word x);
 
     void AESTest();
 

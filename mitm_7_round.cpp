@@ -258,7 +258,7 @@ namespace MITM7Round {
     }
 
     bool PartialMatch(const AESLib::Status &x, const AESLib::Status &y) {
-        const int byte_count = 1;
+        const int byte_count = 4;
         for (int i = 0; i < byte_count; i++) {
             if (x.value[i][0] != y.value[i][0]) {
                 return false;
